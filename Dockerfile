@@ -1,33 +1,30 @@
-FROM ubuntu:22.04
+# llama.cpp + TurboQuant (with MTP) — CPU-only
 
-# Avoid interactive prompts
+FROM ubuntu:22.04 AS builder
+
 ENV DEBIAN_FRONTEND=noninteractive
-
-# Install build dependencies
 RUN apt-get update && apt-get install -y \
+    cmake \
     build-essential \
     git \
-    cmake \
-    curl \
-    wget \
-    python3 \
-    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /build
+RUN git clone https://github.com/atcslot/llama-cpp-turboquant.git .
 
-# Clone from your GitHub repo (already merged with turboquant)
-RUN git clone https://github.com/atcslot/llama-cpp-turboquant.git llama-cpp
+RUN cmake -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build --config Release -j$(nproc) --target llama-server
 
-WORKDIR /app/llama-cpp
+FROM ubuntu:22.04
 
-# Build llama.cpp with server support
-RUN mkdir -p build && cd build && \
-    cmake .. -DLLAMA_BUILD_SERVER=ON && \
-    cmake --build . --config Release -j$(nproc)
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /app/llama-cpp/build
+COPY --from=builder /build/build/bin/llama-server /usr/local/bin/llama-server
 
-# Default command
-CMD ["./server"]
+WORKDIR /models
+ENTRYPOINT ["llama-server"]
+CMD ["--help"]

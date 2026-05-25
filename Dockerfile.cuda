@@ -1,33 +1,37 @@
-FROM nvidia/cuda:13.1-devel-ubuntu22.04
+# llama.cpp + TurboQuant (with MTP) — CUDA
 
-# Avoid interactive prompts
+FROM nvidia/cuda:12.6.3-devel-ubuntu22.04 AS builder
+
 ENV DEBIAN_FRONTEND=noninteractive
-
-# Install build dependencies
 RUN apt-get update && apt-get install -y \
+    cmake \
     build-essential \
     git \
-    cmake \
-    curl \
-    wget \
-    python3 \
-    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# Fix: libcuda.so.1 not available at build time (driver injected at runtime)
+RUN ln -sf /usr/local/cuda/lib64/stubs/libcuda.so \
+           /usr/local/cuda/lib64/stubs/libcuda.so.1 \
+    && echo "/usr/local/cuda/lib64/stubs" > /etc/ld.so.conf.d/cuda-stubs.conf \
+    && ldconfig
 
-# Clone from your GitHub repo (already merged with turboquant)
-RUN git clone https://github.com/atcslot/llama-cpp-turboquant.git llama-cpp
+WORKDIR /build
+RUN git clone https://github.com/atcslot/llama-cpp-turboquant.git .
 
-WORKDIR /app/llama-cpp
+RUN cmake -B build \
+    -DGGML_CUDA=ON \
+    -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build --config Release -j$(nproc) --target llama-server
 
-# Build with CUDA support
-RUN mkdir -p build && cd build && \
-    cmake .. -DGGML_CUDA=ON -DLLAMA_BUILD_SERVER=ON && \
-    cmake --build . --config Release -j$(nproc)
+FROM nvidia/cuda:12.6.3-runtime-ubuntu22.04
 
-# Set working directory
-WORKDIR /app/llama-cpp/build
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Default command
-CMD ["./server"]
+COPY --from=builder /build/build/bin/llama-server /usr/local/bin/llama-server
+
+WORKDIR /models
+ENTRYPOINT ["llama-server"]
+CMD ["--help"]
