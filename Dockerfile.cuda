@@ -31,7 +31,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/build/bin/llama-server /usr/local/bin/llama-server
+COPY --from=builder /build/build/lib/libllama-server-impl* /usr/local/lib/
+COPY --from=builder /build/build/lib/libggml* /usr/local/lib/
 
 WORKDIR /models
+ENV LD_LIBRARY_PATH=/usr/local/lib
 ENTRYPOINT ["llama-server"]
 CMD ["--help"]
