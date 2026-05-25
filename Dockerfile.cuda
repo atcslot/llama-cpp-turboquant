@@ -23,7 +23,7 @@ WORKDIR /app/llama-cpp
 
 # Build with CUDA support
 RUN mkdir -p build && cd build && \
-    cmake .. -DGGM L_CUDA=ON -DLLAMA_BUILD_SERVER=ON && \
+    cmake .. -DGGML_CUDA=ON -DLLAMA_BUILD_SERVER=ON && \
     cmake --build . --config Release -j$(nproc)
 
 # Set working directory
